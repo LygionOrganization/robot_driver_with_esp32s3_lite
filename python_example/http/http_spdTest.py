@@ -28,6 +28,7 @@ if __name__ == "__main__":
                 "text":f"sending {i} cmds",
                 "update":1}
         send_json_command(data)
+        time.sleep(1/60)
     end_time = time.time()
     elapsed = end_time - start_time
 

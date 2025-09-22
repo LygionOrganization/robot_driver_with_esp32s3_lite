@@ -28,23 +28,15 @@ def on_open(ws):
     """callback: new connection"""
     print("connected to ESP32 WebSocket")
 
-    # create JSON cmd here
-    command = {
-        "T":11,
-        "id":1,
-        "pos":2047,
-        "spd":0,
-        "acc":0
-    }
-
-    # send cmd
-    data = json.dumps(command)
-
     start_time = time.time()
     for i in range(TOTAL_MESSAGES):
-        ws.send(data)
+        data = {"T":202,
+            "line":1,
+            "text":f"sending {i} cmds",
+            "update":1}
+        ws.send(json.dumps(data))
         print(f"sending {i} cmds")
-        time.sleep(0.00001)
+        time.sleep(1/60)
     end_time = time.time()
     elapsed = end_time - start_time
 
