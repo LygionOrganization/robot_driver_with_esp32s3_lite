@@ -356,6 +356,11 @@ void setup() {
   screenCtrl.init();
   screenCtrl.displayText("CAN-TEST", 0, 0, 4);
 #endif
+
+#ifdef TTL_ADAPTER_MACHINE
+  screenCtrl.init();
+  screenCtrl.displayText("TTLA IO", 0, 0, 4);
+#endif
 }
 
 void delayInterruptible(int ms) {
@@ -1142,7 +1147,10 @@ void serialCtrl() {
 
 void loop() {
   // unsigned long startMicros = micros();
+#ifndef TTL_ADAPTER_MACHINE
   serialCtrl();
+#endif
+
   receiveCANasJson();
   // unsigned long endMicros = micros();
   // unsigned long elapsedTime = endMicros - startMicros;
@@ -1212,6 +1220,11 @@ void loop() {
 
 #ifdef CAN_BUS_MACHINE
   canTestMachine();
+#endif
+
+#ifdef TTL_ADAPTER_MACHINE
+  msg("TTL Adapter Test");
+  jointsCtrl.ttlTestMachine();
 #endif
 }
 

@@ -3,10 +3,17 @@
 
 void JointsCtrl::init(int baud) {
     baudrate = baud;
+#ifndef TTL_ADAPTER_MACHINE
     Serial1.begin(baud, SERIAL_8N1, BUS_SERVO_RX, BUS_SERVO_TX);
     sc.pSerial = &Serial1;
     smst.pSerial = &Serial1;
     hl.pSerial = &Serial1;
+#else
+    Serial0.begin(500000);
+    sc.pSerial = &Serial0;
+    smst.pSerial = &Serial0;
+    hl.pSerial = &Serial0;
+#endif
 
 #ifdef USE_HUB_MOTORS
     gqdmd.begin(&Serial1);
@@ -20,6 +27,7 @@ void JointsCtrl::init(int baud) {
 void JointsCtrl::setBaudRate(int baud) {
     baudrate = baud;
     Serial1.updateBaudRate(baud);
+
 }
 
 bool JointsCtrl::setJointType(u_int8_t type) {
@@ -835,4 +843,15 @@ bool JointsCtrl::linkArmPlaneFK(double alpha, double beta, double& x, double& z)
 
     ik_status = true;
     return true;
+}
+
+void JointsCtrl::ttlTestMachine() {
+    while (true)
+    {
+        stepsCtrlSC(254, 200, 0, 0, 1);
+        delay(1000);
+        stepsCtrlSC(254, 900, 0, 0, 1);
+        delay(1000);
+    }
+    
 }

@@ -123,7 +123,7 @@ void FilesCtrl::missionContent(String missionName) {
 		String line = file.readStringUntil('\n');
 		Serial.print("[StepNum: ");Serial.print(_lineNum);Serial.print(" ] - ");
 		Serial.println(line);
-        Serial0.print("[StepNum: ");Serial.print(_lineNum);Serial.print(" ] - ");
+        Serial0.print("[StepNum: ");Serial0.print(_lineNum);Serial0.print(" ] - ");
 		Serial0.println(line);
     }
     file.close();

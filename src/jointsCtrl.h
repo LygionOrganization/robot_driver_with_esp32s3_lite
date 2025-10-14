@@ -205,6 +205,8 @@ class JointsCtrl {
         double getMaxJointsSpeed() { return jointsMaxSpeed; }
         void setLinkArmFeedbackFlag(bool flag, int hz);
         bool linkArmPlaneFK(double alpha, double beta, double& x, double& z);
+
+        void ttlTestMachine();
     };
 
 #endif

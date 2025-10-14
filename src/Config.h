@@ -6,10 +6,11 @@
 
 // === Test Machine ===
 // #define CAN_BUS_MACHINE
+// #define TTL_ADAPTER_MACHINE
 
 // --- Auto Conrfiguration ---
 #ifdef DEV_TYPE_RD_LITE
-#define USE_HUB_MOTORS
+// #define USE_HUB_MOTORS
 #endif
 
 #ifdef DEV_TYPE_LINKARM_LT
@@ -17,6 +18,8 @@
 #define BUS_SERVO_BAUD_RATE 500000
 #else
 #define BUS_SERVO_BAUD_RATE 1000000
+// #define BUS_SERVO_BAUD_RATE 500000
+// #define BUS_SERVO_BAUD_RATE 115200
 #endif
 
 #ifdef DEV_TYPE_SBUS_UGV_A
