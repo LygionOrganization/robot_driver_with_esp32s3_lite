@@ -2,12 +2,12 @@ import json
 import time
 import websocket
 
-ESP32_IP = "192.168.0.104"
+ESP32_IP = "192.168.0.103"
 PORT = 80
 PATH = "/ws"
 WS_URL = f"ws://{ESP32_IP}:{PORT}{PATH}"
 
-TOTAL_MESSAGES = 100000
+TOTAL_MESSAGES = 3000
 
 def on_message(ws, message):
     """callback: message recv"""
@@ -36,7 +36,7 @@ def on_open(ws):
             "update":1}
         ws.send(json.dumps(data))
         print(f"sending {i} cmds")
-        time.sleep(1/60)
+        time.sleep(1/6000)
     end_time = time.time()
     elapsed = end_time - start_time
 

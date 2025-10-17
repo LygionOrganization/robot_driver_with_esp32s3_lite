@@ -2,10 +2,10 @@ import serial
 import time
 import json
 
-PORT = "COM11"
+PORT = "COM15"
 BAUD = 1000000 # fake baudrate when use USB CDC
 
-TOTAL_MESSAGES = 100000
+TOTAL_MESSAGES = 3000
 
 ser = serial.Serial(PORT, BAUD, timeout=0.5)
 
@@ -31,10 +31,10 @@ def main():
     # data = {"T":11,"id":1,"pos":2047,"spd":0,"acc":0}
     start_time = time.time()
     for i in range(TOTAL_MESSAGES):
-        data = {"T":202,"line":1,"text":str(i)+"cmdcmdcmd","update":1}
+        data = {"T":202,"line":1,"text":str(i)+"     cmdcmdcmd","update":1}
         send_json(data)
         print(f"sending {i} cmds")
-        time.sleep(0)
+        time.sleep(1/300000)
     end_time = time.time()
     elapsed = end_time - start_time
 

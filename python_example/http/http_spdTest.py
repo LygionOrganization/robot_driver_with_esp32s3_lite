@@ -2,7 +2,7 @@ import requests
 import json
 import time
 
-ESP32_IP = "192.168.0.104"
+ESP32_IP = "192.168.0.103"
 PORT = 80
 URL = f"http://{ESP32_IP}:{PORT}/api/cmd"
 
@@ -28,7 +28,7 @@ if __name__ == "__main__":
                 "text":f"sending {i} cmds",
                 "update":1}
         send_json_command(data)
-        time.sleep(1/60)
+        # time.sleep(1/60)
     end_time = time.time()
     elapsed = end_time - start_time
 

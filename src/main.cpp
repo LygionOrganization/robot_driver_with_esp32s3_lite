@@ -8,6 +8,8 @@
 #include "USB.h"
 #include "USBCDC.h"
 #include "tusb.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 
 #include "Config.h"
 #include "jointsCtrl.h"
@@ -31,9 +33,10 @@ FilesCtrl filesCtrl;
 ScreenCtrl screenCtrl;
 Wireless wireless;
 
-int recvNum = 0;
+#define CMD_MAX_LEN 256
+#define CMD_QUEUE_LEN 50
+QueueHandle_t cmdQueue;
 
-bool newCmdReceived = false;
 bool breakloop = false;
 unsigned long tuneStartTime;
 int* jointFeedback;
@@ -120,10 +123,17 @@ void handleWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
     AwsFrameInfo *info = (AwsFrameInfo *)arg;
     if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
       // recv JSON
-      recvNum++;
-      newCmdChar = data;
-      newCmdReceived = true;
+      char cmdBuffer[CMD_MAX_LEN];
+      memcpy(cmdBuffer, data, len);
+      cmdBuffer[len] = '\0';
+      
+      if (xQueueSend(cmdQueue, cmdBuffer, 0) != pdPASS) {
+        msg("Queue full, dropping command");
+      }
+
       if (memmem(data, len, "\"T\":0", 5) != nullptr) {
+        char tmp[CMD_MAX_LEN];
+        while (xQueueReceive(cmdQueue, tmp, 0) == pdPASS) {}
         breakloop = true;
         msg("breakloop");
       }
@@ -188,14 +198,22 @@ void setupHttpRoutes() {
   server.on("/api/cmd", HTTP_POST, [](AsyncWebServerRequest *req){},
     NULL,
     [](AsyncWebServerRequest *req, uint8_t *data, size_t len, size_t index, size_t total){
-      recvNum++;
-      newCmdChar = data;
-      newCmdReceived = true;
+      // recv JSON
+      char cmdBuffer[CMD_MAX_LEN];
+      memcpy(cmdBuffer, data, len);
+      cmdBuffer[len] = '\0';
+      
+      if (xQueueSend(cmdQueue, cmdBuffer, 0) != pdPASS) {
+        msg("Queue full, dropping command");
+      }
+
       if (memmem(data, len, "\"T\":0", 5) != nullptr) {
+        char tmp[CMD_MAX_LEN];
+        while (xQueueReceive(cmdQueue, tmp, 0) == pdPASS) {}
         breakloop = true;
         msg("breakloop");
       }
-      req->send(200, "application/json", String(recvNum));
+      req->send(200, "application/json", "recv");
     }
   );
 
@@ -242,6 +260,11 @@ void setup() {
   Wire.begin(IIC_SDA, IIC_SCL);
   // Wire.setClock(400000);
   Wire.setClock(100000);
+
+  cmdQueue = xQueueCreate(CMD_QUEUE_LEN, CMD_MAX_LEN);
+  if (cmdQueue == NULL) {
+    msg("Failed to create command queue!");
+  }
 
   // buzzer
   pinMode(BUZZER_PIN, OUTPUT);
@@ -379,6 +402,8 @@ void delayInterruptible(int ms) {
 
 void breakLoop() {
   breakloop = true;
+  char tmp[CMD_MAX_LEN];
+  while (xQueueReceive(cmdQueue, tmp, 0) == pdPASS) {}
 }
 
 bool runStep(String missionName, int step) {
@@ -1090,14 +1115,23 @@ void tud_cdc_rx_cb(uint8_t itf) {
     // Detect the end of the JSON string based on a specific termination character
     if (receivedChar == '\n') {
       // Now we have received the complete JSON string
-      recvNum++;
+      char cmdBuffer[CMD_MAX_LEN];
+      size_t len = receivedData.length();
+      if (len >= CMD_MAX_LEN) len = CMD_MAX_LEN - 1;
       newCmdChar = (uint8_t*)receivedData.c_str();
-      newCmdReceived = true;
-      if (memmem(newCmdChar, receivedData.length(), "\"T\":0", 5) != nullptr) {
+      memcpy(cmdBuffer, newCmdChar, len);
+      cmdBuffer[len] = '\0';
+
+      if (xQueueSend(cmdQueue, cmdBuffer, 0) != pdPASS) {
+        msg("Queue full, dropping command");
+      }
+      
+      if (memmem(newCmdChar, len, "\"T\":0", 5) != nullptr) {
+        char tmp[CMD_MAX_LEN];
+        while (xQueueReceive(cmdQueue, tmp, 0) == pdPASS) {}
         breakloop = true;
         msg("breakloop");
       }
-      delay(0);
       receivedData = "";
     }
   }
@@ -1206,14 +1240,15 @@ void loop() {
   }
 #endif
 
-  if (newCmdReceived) {
-    DeserializationError err = deserializeJson(jsonCmdReceive, newCmdChar);
+  char cmdBuffer[CMD_MAX_LEN];
+  if (xQueueReceive(cmdQueue, cmdBuffer, 0) == pdPASS) {
+    DeserializationError err = deserializeJson(jsonCmdReceive, cmdBuffer);
     if (err == DeserializationError::Ok) {
       jsonCmdReceiveHandler(jsonCmdReceive);
       jsonCmdReceive.clear();
-      ws.textAll(outputString);
+    } else {
+      msg("JSON parse error");
     }
-    newCmdReceived = false;
   }
 
   pushTelemetry();
