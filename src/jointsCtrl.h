@@ -7,6 +7,11 @@
 #endif
 #include <math.h>
 
+// class SMS_STS_Public : public SMS_STS {
+// public:
+//     using SMS_STS::writeByte;
+// };
+
 #define JOINT_TYPE_SC 0
 #define JOINT_TYPE_SMST 1
 #define JOINT_TYPE_HL 2
@@ -34,6 +39,7 @@
 #define SERVO_ARRAY_1 32
 #define SERVO_ARRAY_2 33
 #define SERVO_ARRAY_3 34
+#define TTL_NODE_ID   40
 
 // LyLinkArm LT
 #define LINK_AB 224.0
@@ -54,7 +60,6 @@ class JointsCtrl {
 #ifdef USE_HUB_MOTORS
         GQDMD gqdmd;
 #endif
-
         // for applications: LyLinkArm
         int jointsZeroPos[JOINTS_NUM]; // array to store the zero position of each joint
         int jointsFeedbackPos[JOINTS_NUM]; // array to store the feedback position from each joint
@@ -111,6 +116,11 @@ class JointsCtrl {
 
 
     public:
+        // for TTL Node
+        int writeByte(u_int8_t id, u_int8_t addr, u8 data);
+        void singleLedCtrl(u_int8_t id, u_int8_t num, u_int8_t r, u_int8_t g, u_int8_t b);
+        void allLedCtrl(u_int8_t id, u_int8_t r, u_int8_t g, u_int8_t b);
+
         // for applications: LyLinkArm
         JointsCtrl() {
             // Initialize jointsZeroPos array
@@ -123,8 +133,12 @@ class JointsCtrl {
             }
         }
 
-        bool linkArmFeedbackFlag = false; // link arm feedback flag
-        int linkArmFeedbackHz = 10; // link arm feedback Hz
+// #ifdef DEV_TYPE_LINKARM_LT
+        bool linkArmFeedbackFlag = true; // link arm feedback flag
+// #else
+//         bool linkArmFeedbackFlag = false;
+// #endif
+        int linkArmFeedbackHz = 20; // link arm feedback Hz
 
         unsigned int baudrate = 1000000;
 

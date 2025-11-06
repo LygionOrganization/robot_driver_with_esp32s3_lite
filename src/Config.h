@@ -252,6 +252,7 @@ static int timeOffset = 50;
 // {"T":131,"pos":[497,505,286,557]} (LE-2)
 // {"T":131,"pos":[494,509,292,515]} (LE-3)
 // {"T":131,"pos":[519,471,484,514]} (LY-6V)
+// {"T":131,"pos":[496,514,292,514]} (LY-M)
 // jointsCtrl.setJointsZeroPosArray(int values[]);
 #define CMD_SET_JOINTS_ZERO 131
 
@@ -317,11 +318,14 @@ static int timeOffset = 50;
 #define CMD_HUB_MOTOR_CTRL 180
 
 
-// id 0 -> left LED
-// id 1 -> right LED
-// JSON cmds: [T:201, set:[id, r, g, b]]
-// {"T":201,"set":[0,9,0,0]}
-#define CMD_SET_COLOR 201
+// id 1 -> left LED
+// id 2 -> right LED
+// JSON cmds: [T:201,"id":2,"set":[num, r, g, b]]
+// {"T":200,"id":2,"set":[1,255,0,0]}
+#define CMD_SET_SINGLE_COLOR 200
+// JSON cmds: [T:201,"id":2,"set":[r, g, b]]
+// {"T":201,"id":2,"set":[9,0,0]}
+#define CMD_SET_ALL_COLOR 201
 // ctrl oled display a single line
 // updateFlag = 0 -> no update, updateFlag = 1 -> update
 // {"T":202,"line":1,"text":"Hello, world!","update":1}

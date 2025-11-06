@@ -855,3 +855,36 @@ void JointsCtrl::ttlTestMachine() {
     }
     
 }
+
+// TTL Node
+int JointsCtrl::writeByte(u_int8_t id, u_int8_t addr, u8 data) {
+    return smst.writeByte(id, addr, data);
+}
+
+void JointsCtrl::singleLedCtrl(u_int8_t id, u_int8_t num, u_int8_t r, u_int8_t g, u_int8_t b) {
+    uint8_t r2 = (r * 4) / 256;
+    uint8_t g3 = (g * 8) / 256;
+    uint8_t b2 = (b * 4) / 256;
+
+    uint8_t rgb232 = ((g3 << 5) | (r2 << 2) | b2) << 1;
+
+    if (num == 1) {
+        smst.writeByte(id, 43, rgb232);
+    } else if (num == 2)
+    {
+        smst.writeByte(id, 44, rgb232);
+    }
+    smst.writeByte(id, 42, 2);
+}
+
+void JointsCtrl::allLedCtrl(u_int8_t id, u_int8_t r, u_int8_t g, u_int8_t b) {
+    uint8_t r2 = (r * 4) / 256;
+    uint8_t g3 = (g * 8) / 256;
+    uint8_t b2 = (b * 4) / 256;
+
+    uint8_t rgb232 = ((g3 << 5) | (r2 << 2) | b2) << 1;
+
+    smst.writeByte(id, 43, rgb232);
+    smst.writeByte(id, 44, rgb232);
+    smst.writeByte(id, 42, 2);
+}

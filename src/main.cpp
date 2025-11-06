@@ -71,6 +71,7 @@ void msg(String msgStr, bool newLine = true) {
       Serial0.print(msgStr);
     }
   }
+#endif
   if (usbMsgFlag) {
     if (newLine) {
       Serial.println(msgStr);
@@ -78,7 +79,6 @@ void msg(String msgStr, bool newLine = true) {
       Serial.print(msgStr);
     }
   }
-#endif
 }
 
 void getMsgStatus() {
@@ -283,6 +283,7 @@ void setup() {
   jointsCtrl.setJointType(JOINT_TYPE_SC);
   jointsCtrl.setEncoderStepRange(1024, 220);
   jointsCtrl.setJointsZeroPosArray(jointsZeroPos);
+  jointsCtrl.allLedCtrl(40, 160, 0, 255);
 #ifdef USE_ROBOTIC_ARM
   double maxSpeedBuffer = jointsCtrl.getMaxJointsSpeed();
   jointsCtrl.setMaxJointsSpeed(0.1);
@@ -374,6 +375,8 @@ void setup() {
       NULL,            
       1                
   );
+
+  jointsCtrl.allLedCtrl(40, 0, 0, 0);
 
 #ifdef CAN_BUS_MACHINE
   screenCtrl.init();
@@ -886,7 +889,19 @@ void jsonCmdReceiveHandler(const JsonDocument& jsonCmdInput){
 
 
 
-
+  case CMD_SET_SINGLE_COLOR:
+                        jointsCtrl.singleLedCtrl(jsonCmdInput["id"],
+                                                 jsonCmdInput["set"][0],
+                                                 jsonCmdInput["set"][1],
+                                                 jsonCmdInput["set"][2],
+                                                 jsonCmdInput["set"][3]);
+                        break;
+  case CMD_SET_ALL_COLOR:
+                        jointsCtrl.allLedCtrl(jsonCmdInput["id"],
+                                              jsonCmdInput["set"][0],
+                                              jsonCmdInput["set"][1],
+                                              jsonCmdInput["set"][2]);
+                        break;
   case CMD_DISPLAY_SINGLE:
                         screenCtrl.changeSingleLine(jsonCmdInput["line"], 
                                                     jsonCmdInput["text"], 
@@ -1219,7 +1234,7 @@ void loop() {
     float left_speed = (speed_input) * speed_limit * 6000.0 - (turn_input * 0.33 * 6000.0);
     float right_speed = (speed_input) * speed_limit * 6000.0 + (turn_input * 0.33 * 6000.0);
 
-    jointsCtrl.hubMotorCtrl(left_speed, (right_speed), right_speed, left_speed);
+    jointsCtrl.hubMotorCtrl(left_speed, -(right_speed), right_speed, left_speed);
   }
 #endif
 
