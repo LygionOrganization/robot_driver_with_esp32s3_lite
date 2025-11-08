@@ -61,7 +61,6 @@ bool JointsCtrl::setEncoderStepRange(u_int16_t steps, double angle) {
     jointRangeRad = jointRangeAngle * M_PI / 180.0;
 
     for(int i = 0; i < JOINTS_NUM; i++) {
-        jointsZeroPos[i] = middleSteps; // or any other default value
         jointsFeedbackPos[i] = middleSteps; // or any other default value
         jointsCurrentPos[i] = middleSteps; // or any other default value
         jointsGoalPos[i] = middleSteps; // or any other default value
@@ -887,4 +886,23 @@ void JointsCtrl::allLedCtrl(u_int8_t id, u_int8_t r, u_int8_t g, u_int8_t b) {
     smst.writeByte(id, 43, rgb232);
     smst.writeByte(id, 44, rgb232);
     smst.writeByte(id, 42, 2);
+}
+
+int JointsCtrl::readSBUS() {
+    sbus[0] = 0;
+    sbus[1] = smst.readWord(40, 68);
+    sbus[2] = smst.readWord(40, 70);
+    sbus[3] = smst.readWord(40, 72);
+
+    sbus[4] = smst.readWord(40, 74);
+    sbus[5] = smst.readWord(40, 76);
+    sbus[6] = smst.readWord(40, 78);
+    sbus[7] = smst.readWord(40, 80);
+
+    sbus[8] = smst.readWord(40, 82);
+    sbus[9] = smst.readWord(40, 84);
+    sbus[10] = smst.readWord(40, 86);
+    sbus[11] = smst.readWord(40, 88);
+
+    return sbus[2];
 }

@@ -1,7 +1,7 @@
 // === Select Devive Type ===
 // === Only One Device Type Can Be Selected ===
-#define DEV_TYPE_RD_LITE
-// #define DEV_TYPE_LINKARM_LT
+// #define DEV_TYPE_RD_LITE
+#define DEV_TYPE_LINKARM_LT
 // #define DEV_TYPE_SBUS_UGV_A
 
 // === Test Machine ===
@@ -321,10 +321,10 @@ static int timeOffset = 50;
 // id 1 -> left LED
 // id 2 -> right LED
 // JSON cmds: [T:201,"id":2,"set":[num, r, g, b]]
-// {"T":200,"id":2,"set":[1,255,0,0]}
+// {"T":200,"id":40,"set":[1,255,0,0]}
 #define CMD_SET_SINGLE_COLOR 200
 // JSON cmds: [T:201,"id":2,"set":[r, g, b]]
-// {"T":201,"id":2,"set":[9,0,0]}
+// {"T":201,"id":40,"set":[9,0,0]}
 #define CMD_SET_ALL_COLOR 201
 // ctrl oled display a single line
 // updateFlag = 0 -> no update, updateFlag = 1 -> update
@@ -405,7 +405,9 @@ static int timeOffset = 50;
 
 // {"T":410,"longrange":0}
 #define CMD_INIT_ESP_NOW 410
-// 0 -> no esp-now receive, 1 -> start esp-now[default]
+// 0 -> no esp-now receive[default]
+// 1 -> esp-now on, recv cmd from known MAC addr
+// 2 -> esp-now on, recv broadcast cmd
 // {"T":411,"mode":1}
 #define CMD_SET_ESP_NOW_MODE 411
 // {"T":412}
@@ -414,6 +416,8 @@ static int timeOffset = 50;
 #define CMD_ESP_NOW_SEND 413
 // {"T":414,"mac":"FF:FF:FF:FF:FF:FF"}
 #define CMD_ADD_MAC 414
+// {"T":415,"fake":0}
+#define CMD_FAKE_MAC 415
 
 // esp-now test:
 // {"T":490,"mac":"FF:FF:FF:FF:FF:FF","data":"{\"T\":490}"}

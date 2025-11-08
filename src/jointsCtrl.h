@@ -61,14 +61,7 @@ class JointsCtrl {
         GQDMD gqdmd;
 #endif
         // for applications: LyLinkArm
-        int jointsZeroPos[JOINTS_NUM]; // array to store the zero position of each joint
-        int jointsFeedbackPos[JOINTS_NUM]; // array to store the feedback position from each joint
-        int jointsFeedbackTorque[JOINTS_NUM]; // array to store the feedback torque from each joint
-        int jointsCurrentPos[JOINTS_NUM]; // array to store the current position of each joint
-        int jointsGoalPos[JOINTS_NUM]; // array to store the goal position of each joint
-        int jointsLastPos[JOINTS_NUM]; // array to store the last position of each joint
-        int jointID[JOINTS_NUM] = {SERVO_ARRAY_0, SERVO_ARRAY_1, SERVO_ARRAY_2, SERVO_ARRAY_3};
-        int8_t jointDirection[JOINTS_NUM] = {1, 1, 1, 1}; // direction of each joint
+
         // [0] base rad
         // [1] shoulder-front rad
         // [2] shoulder-rear rad
@@ -93,7 +86,7 @@ class JointsCtrl {
 
                 
         // the max speed of the joints(in rad/s)
-        double jointsMaxSpeed = 1.2;
+        double jointsMaxSpeed = 0;
         
         // [0]ping status
         // [1]position
@@ -116,10 +109,22 @@ class JointsCtrl {
 
 
     public:
+        // for applications: LyLinkArm
+        int jointsZeroPos[JOINTS_NUM]; // array to store the zero position of each joint
+        int jointsFeedbackPos[JOINTS_NUM]; // array to store the feedback position from each joint
+        int jointsFeedbackTorque[JOINTS_NUM]; // array to store the feedback torque from each joint
+        int jointsCurrentPos[JOINTS_NUM]; // array to store the current position of each joint
+        int jointsGoalPos[JOINTS_NUM]; // array to store the goal position of each joint
+        int jointsLastPos[JOINTS_NUM]; // array to store the last position of each joint
+        int jointID[JOINTS_NUM] = {SERVO_ARRAY_0, SERVO_ARRAY_1, SERVO_ARRAY_2, SERVO_ARRAY_3};
+        int8_t jointDirection[JOINTS_NUM] = {1, 1, 1, 1}; // direction of each joint
+
         // for TTL Node
+        int sbus[17];
         int writeByte(u_int8_t id, u_int8_t addr, u8 data);
         void singleLedCtrl(u_int8_t id, u_int8_t num, u_int8_t r, u_int8_t g, u_int8_t b);
         void allLedCtrl(u_int8_t id, u_int8_t r, u_int8_t g, u_int8_t b);
+        int readSBUS();
 
         // for applications: LyLinkArm
         JointsCtrl() {
@@ -133,14 +138,22 @@ class JointsCtrl {
             }
         }
 
-// #ifdef DEV_TYPE_LINKARM_LT
+#ifdef DEV_TYPE_LINKARM_LT
         bool linkArmFeedbackFlag = true; // link arm feedback flag
-// #else
-//         bool linkArmFeedbackFlag = false;
-// #endif
+#else
+        bool linkArmFeedbackFlag = false;
+#endif
         int linkArmFeedbackHz = 20; // link arm feedback Hz
 
         unsigned int baudrate = 1000000;
+        bool fineTuningMode = false;
+        bool torqueLockMode = true;
+        bool espnowLeader = false;
+
+        double fpv_r = 260.5;
+        double fpv_b = 0;
+        double fpv_z = 122.38;
+        double fpv_g = 30;
 
         void init(int baud);
         void setBaudRate(int baud);

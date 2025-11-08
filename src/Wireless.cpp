@@ -1,23 +1,12 @@
 #include "Wireless.h"
 
 JsonCommandCallback jsonCommandCallback = nullptr;
-
-// JsonDocument wsJson;
-// JsonDocument wsRsp;
-// String wsOutString;
+Wireless* g_pThis = nullptr;
 
 #define WIFI_MODE_NONE 0
 #define WIFI_MODE_AP_STA 1
 
-// JsonCommandCallback jsonCommandCallback = nullptr;
-// JsonDocument jsonCmdReceiveEspnow;
-// struct_message espNowMessage;
-// struct_message espNowMegsRecv;
-
-
-// JsonCommandCallback jsonCommandCallback;
 JsonDocument jsonCmdReceiveEspnow;
-
 
 typedef struct struct_message {
     char message[250];
@@ -30,8 +19,6 @@ int wifiMode = 1;
 int maxClients = 1;
 bool statusAP = false;
 bool statusSTA = false;
-
-
 
 bool Wireless::setAP(String ssid, String password, int wifiChannel) {
     if (wifiMode == WIFI_MODE_NONE) {
@@ -156,45 +143,59 @@ String Wireless::getSTAIP() {
 
 
 
+void Wireless::printKnownMacs() {
+    Serial.println("--- Known MAC Addresses ---");
+    if (knownMacs.empty()) {
+        Serial.println("Empty");
+        return;
+    }
+    for (size_t i = 0; i < knownMacs.size(); ++i) {
+        Serial.print("Index ");
+        Serial.print(i);
+        Serial.print(": ");
+        for (int j = 0; j < 6; ++j) {
+            Serial.printf("%02X", knownMacs[i][j]);
+            if (j < 5) Serial.print(":");
+        }
+        Serial.println();
+    }
+    Serial.println("--------------------------");
+}
 
-
-
-
-
-bool isKnownMac(const uint8_t *mac) {
-    for (int i = 0; i < sizeof(knownMacs) / sizeof(knownMacs[0]); i++) {
-        if (memcmp(mac, knownMacs[i], 6) == 0) {
+bool Wireless::isKnownMac(const uint8_t *mac) {
+    for (const auto& knownMac : knownMacs) {
+        if (memcmp(knownMac.data(), mac, 6) == 0) {
             return true;
         }
     }
     return false;
 }
 
-void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
-    if (!espnowMode) {
-        Serial.println("ESP-NOW is off, skip receiving data");
-        Serial0.println("ESP-NOW is off, skip receiving data");
+void Wireless::OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
+    Serial.println("EN-1");
+    if (espnowMode == 0) {
+        // do nothing
         return;
     }
-
-    if (receivedFromKnownMac) {
+    if (espnowMode == 1) {
         if (!isKnownMac(mac_addr)) {
-            // Serial.println("Received data from unknown MAC address, skip processing");
-            // Serial0.println("Received data from unknown MAC address, skip processing");
+            // do nothing
             return;
         }
     }
-
-    memcpy(&espNowMegsRecv, data, sizeof(espNowMegsRecv));
-
-    Serial.print("Bytes received: "); Serial.println(data_len);
-    Serial0.print("Bytes received: "); Serial0.println(data_len);
-
-    DeserializationError err = deserializeJson(jsonCmdReceiveEspnow, espNowMegsRecv.message);
-    if (err == DeserializationError::Ok && jsonCommandCallback != nullptr) {
-        jsonCommandCallback(jsonCmdReceiveEspnow);
+    if (data_len == sizeof(struct_message)) {
+        memcpy(&espNowMegsRecv, data, sizeof(espNowMegsRecv));
+        espNowMegsRecv.message[sizeof(espNowMegsRecv.message) - 1] = '\0';
+        jsonCommandCallback(espNowMegsRecv.message);
+        Serial.println(espNowMegsRecv.message);
     }
 } 
+
+void IRAM_ATTR Wireless::staticRecvCallback(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len) {
+    if (g_pThis) {
+        g_pThis->OnDataRecv(info->src_addr, incomingData, len);
+    }
+}
 
 void Wireless::espnowInit(bool longRange) {
     if (longRange) {
@@ -213,22 +214,31 @@ void Wireless::espnowInit(bool longRange) {
 
     if (esp_now_init() != ESP_OK) {
         Serial.println("Error initializing ESP-NOW");
-        Serial0.println("Error initializing ESP-NOW");
         return;
     }
-    esp_now_register_recv_cb([](const esp_now_recv_info_t *info, const uint8_t *incomingData, int len) {
-    esp_now_peer_info_t peerInfo;
-    memcpy(peerInfo.peer_addr, info->src_addr, 6);  // 从 info 取源 MAC
-    OnDataRecv(peerInfo.peer_addr, incomingData, len);
-    });
+
+    g_pThis = this;
+    esp_now_register_recv_cb(staticRecvCallback);
+
+    // example for adding known MACs
+    // MacAddress defaultMac1 = {0x24, 0x6F, 0x28, 0xAB, 0xCD, 0xEF};
+    // MacAddress defaultMac2 = {0x24, 0x6F, 0x28, 0x12, 0x34, 0x56};
+
+    // knownMacs.push_back(defaultMac1);
+    // knownMacs.push_back(defaultMac2);
 }
+
+
 
 bool Wireless::setEspNowMode(int mode) {
     if (mode == 0) {
-        espnowMode = false;
+        espnowMode = 0;
         return true;
     } else if (mode == 1) {
-        espnowMode = true;
+        espnowMode = 1;
+        return true;
+    } else if (mode == 2) {
+        espnowMode = 2;
         return true;
     } else {
         return false;
@@ -243,17 +253,11 @@ String Wireless::macToString(uint8_t mac[6]) {
 }
 
 String Wireless::getMac() {
-    return WiFi.macAddress();
-
-    // static uint8_t mac[6];
-    // if (WiFi.macAddress(mac) == ESP_OK) {
-    //     return mac;
-    // } else {
-    //     Serial.println("Failed to get MAC address");
-    //     Serial0.println("Failed to get MAC address");
-    //     return nullptr;
-    // }
-    // return nullptr;
+    if (fakeMac) {
+        return "FF:FF:FF:FF:FF:FF";
+    } else {
+        return WiFi.macAddress();
+    }
 }
 
 void Wireless::macStringToByteArray(const String& macString, uint8_t* byteArray) {
@@ -264,47 +268,39 @@ void Wireless::macStringToByteArray(const String& macString, uint8_t* byteArray)
 }
 
 bool Wireless::sendEspNow(String macInput, String data) {
-    if (!espnowMode) {
-        Serial.println("ESP-NOW is off, skip sending data");
-        Serial0.println("ESP-NOW is off, skip sending data");
+    if (macInput.length() != 17) {
+        Serial.println("invalid MAC address format.");
         return false;
     }
 
-    if (macInput.length() != 17) {
-        Serial0.println("invalid MAC address format.");
+    if (data.length() >= sizeof(struct_message::message)) {
+        Serial.println("Data too long for struct message buffer.");
         return false;
     }
+
     uint8_t macArray[6];
     macStringToByteArray(macInput, macArray);
 
-    if (esp_now_send(macArray, (uint8_t*)data.c_str(), data.length()) != ESP_OK) {
-        Serial.println("Failed to send data");
-        Serial0.println("Failed to send data");
+    strcpy(espNowMessage.message, data.c_str());
+
+    if (esp_now_send(macArray, (uint8_t*)&espNowMessage, sizeof(struct_message)) != ESP_OK) {
+        // Serial.println("Failed to send data");
         return false;
     } else {
-        Serial.println("Data sent successfully");
-        Serial0.println("Data sent successfully");
+        // Serial.println("Data sent successfully");
         return true;
     }
 }
 
 bool Wireless::sendEspNowJson(uint8_t mac[6], const JsonDocument& jsonCmdInput) {
-    if (!espnowMode) {
-        Serial.println("ESP-NOW is off, skip sending data");
-        Serial0.println("ESP-NOW is off, skip sending data");
-        return false;
-    }
+    serializeJson(jsonCmdInput, espNowMessage.message, sizeof(espNowMessage.message));
 
-    char outputString[250];
-    serializeJson(jsonCmdInput, outputString);
-
-    if (esp_now_send(mac, (uint8_t*)outputString, strlen(outputString)) != ESP_OK) {
-        Serial.println("Failed to send data");
-        Serial0.println("Failed to send data");
+    // if (esp_now_send(mac, (uint8_t*)outputString, strlen(outputString)) != ESP_OK) {
+    if (esp_now_send(mac, (uint8_t*)&espNowMessage, sizeof(struct_message)) != ESP_OK) {
+        // Serial.println("Failed to send data");
         return false;
     } else {
-        Serial.println("Data sent successfully");
-        Serial0.println("Data sent successfully");
+        // Serial.println("Data sent successfully");
         return true;
     }
 }
@@ -314,8 +310,9 @@ void Wireless::setJsonCommandCallback(JsonCommandCallback callback) {
 }
 
 void Wireless::addMacToPeerString(String macInput) {
+    printKnownMacs();
     if (macInput.length() != 17) {
-        Serial0.println("invalid MAC address format.");
+        Serial.println("invalid MAC address format.");
         return;
     }
     uint8_t macArray[6];
@@ -325,23 +322,27 @@ void Wireless::addMacToPeerString(String macInput) {
     memcpy(peerInfo.peer_addr, macArray, 6);
     if (esp_now_add_peer(&peerInfo) != ESP_OK) {
         Serial.println("Failed to add peer");
-        Serial0.println("Failed to add peer");
     }
+    MacAddress newMac;
+    memcpy(newMac.data(), macArray, 6);
+    knownMacs.push_back(newMac);
     Serial.print("Peer added successfully: ");
     Serial.println(macInput);
-    Serial0.print("Peer added successfully: ");
-    Serial0.println(macInput);
+    printKnownMacs();
 }
 
 void Wireless::addMacToPeer(uint8_t mac[6]) {
-    // esp_now_peer_info_t peerInfo;
+    printKnownMacs();
     memcpy(peerInfo.peer_addr, mac, 6);
     if (esp_now_add_peer(&peerInfo) != ESP_OK) {
         Serial.println("Failed to add peer");
-        Serial0.println("Failed to add peer");
+    } else {
+        Serial.print("Peer added successfully: ");
+        Serial.println(macToString(mac));
+
+        MacAddress newMac;
+        memcpy(newMac.data(), mac, 6);
+        knownMacs.push_back(newMac);
     }
-    Serial.print("Peer added successfully: ");
-    Serial.println(macToString(mac));
-    Serial0.print("Peer added successfully: ");
-    Serial0.println(macToString(mac));
+    printKnownMacs();
 }

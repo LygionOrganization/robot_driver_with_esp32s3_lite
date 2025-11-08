@@ -10,7 +10,7 @@
 #include "tusb.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
-
+QueueHandle_t cmdQueue;
 #include "Config.h"
 #include "jointsCtrl.h"
 #include "FilesCtrl.h"
@@ -35,13 +35,12 @@ Wireless wireless;
 
 #define CMD_MAX_LEN 256
 #define CMD_QUEUE_LEN 50
-QueueHandle_t cmdQueue;
 
 bool breakloop = false;
 unsigned long tuneStartTime;
 int* jointFeedback;
 
-int jointsZeroPos[JOINTS_NUM] = {519, 471, 484, 514};
+int jointsZeroPos[JOINTS_NUM] = {511, 511, 511, 511};
 int jointsCurrentPos[JOINTS_NUM];
 double jointFBRads[JOINTS_NUM];
 int jointFBTorques[JOINTS_NUM];
@@ -52,6 +51,7 @@ double xyzgIK[JOINTS_NUM + 1];
 double rbzgIK[JOINTS_NUM + 1];
 
 void jsonCmdReceiveHandler(const JsonDocument& jsonCmdInput);
+void addJsonCmd2Queue(const char* jsonString);
 void runMission(String missionName, int intervalTime, int loopTimes);
 
 unsigned long startTime;
@@ -258,8 +258,7 @@ void setup() {
   msg("Device starting...");
 
   Wire.begin(IIC_SDA, IIC_SCL);
-  // Wire.setClock(400000);
-  Wire.setClock(100000);
+  Wire.setClock(400000);
 
   cmdQueue = xQueueCreate(CMD_QUEUE_LEN, CMD_MAX_LEN);
   if (cmdQueue == NULL) {
@@ -271,7 +270,7 @@ void setup() {
   digitalWrite(BUZZER_PIN, HIGH);
   buttonBuzzer();
 
-  // can
+  // CAN-2.0
   CanStart();
 
   // fake args, it will be ignored by the USB stack, default baudrate is 12Mbps
@@ -279,21 +278,8 @@ void setup() {
   USB.begin();
   msg("ESP32-S3 USB CDC DONE!");
 
+  // init serial for bus devs
   jointsCtrl.init(BUS_SERVO_BAUD_RATE);
-  jointsCtrl.setJointType(JOINT_TYPE_SC);
-  jointsCtrl.setEncoderStepRange(1024, 220);
-  jointsCtrl.setJointsZeroPosArray(jointsZeroPos);
-  jointsCtrl.allLedCtrl(40, 160, 0, 255);
-#ifdef USE_ROBOTIC_ARM
-  double maxSpeedBuffer = jointsCtrl.getMaxJointsSpeed();
-  jointsCtrl.setMaxJointsSpeed(0.1);
-  jointsCtrl.linkArmFPVIK(LINK_AB + LINK_BF_1 + LINK_EF/2, 
-                          0, 
-                          LINK_BF_2,
-                          0);
-  msg("JointsCtrl initialized.");
-  jointsCtrl.setMaxJointsSpeed(maxSpeedBuffer);
-#endif
 
 #ifdef USE_UI_CTRL
   screenCtrl.init();
@@ -313,15 +299,14 @@ void setup() {
   } else {
     msg("boot mission already exists.");
     if (filesCtrl.checkStepByType("boot", CMD_SET_WIFI_MODE)) {
-      Serial.println("Already set wifi mode.");
-      Serial0.println("Already set wifi mode.");
+      msg("Already set wifi mode.");
     } else {
       filesCtrl.appendStep("boot", "{\"T\":400,\"mode\":1,\"ap_ssid\":\"Robot\",\"ap_password\":\"12345678\",\"channel\":1,\"sta_ssid\":\"\",\"sta_password\":\"\"}");
-      Serial.println("Haven't set wifi mode yet. Appending to boot mission.");
-      Serial0.println("Haven't set wifi mode yet. Appending to boot mission.");
+      msg("Haven't set wifi mode yet. Appending to boot mission.");
     }
   }
   runMission("boot", 0, 1);
+  delay(200);
   msg("File system initialized.");
 #else
   msg("File system NOT initialized.");
@@ -329,8 +314,9 @@ void setup() {
 
 #ifdef USE_ESP_NOW
   wireless.espnowInit(false);
-  // wireless.espnowInit(true);
-  wireless.setJsonCommandCallback(jsonCmdReceiveHandler);
+  // wireless.espnowInit(true); // longRange Mode
+  // wireless.setJsonCommandCallback(jsonCmdReceiveHandler);
+  wireless.setJsonCommandCallback(addJsonCmd2Queue);
   msg("ESP-NOW initialized.");
 #else
   msg("ESP-NOW NOT initialized.");
@@ -347,6 +333,61 @@ void setup() {
   */
   menu_init_RD();
 
+#ifdef USE_ROBOTIC_ARM
+  jointsCtrl.setJointType(JOINT_TYPE_SC);
+  jointsCtrl.setEncoderStepRange(1024, 220);
+  // jointsCtrl.setJointsZeroPosArray(jointsZeroPos);
+  jointsCtrl.allLedCtrl(40, 160, 0, 255);
+  wireless.addMacToPeer(broadcastAddress);
+  if (!filesCtrl.checkStepByType("boot", CMD_SET_JOINTS_ZERO)) {
+    msg("No CMD_SET_JOINTS_ZERO found, torqueLock <OFF>");
+    jointsCtrl.torqueLockMode = false;
+    jointsCtrl.fineTuningMode = true;
+    jointsCtrl.allLedCtrl(40, 255, 32, 0);
+    jointsCtrl.torqueLock(254, 0);
+    screenCtrl.changeSingleLine(1, "-----o---o     Manual", 0);
+    screenCtrl.changeSingleLine(2, "     |   | Joint Pose", 0);
+    screenCtrl.changeSingleLine(3, "     oo--o Status<OK>", 0);
+    screenCtrl.changeSingleLine(4, "then longPress <Down>", 1);
+  } else {
+    double maxSpeedBuffer = jointsCtrl.getMaxJointsSpeed();
+    jointsCtrl.setMaxJointsSpeed(0.1);
+    jointsCtrl.linkArmFPVIK(LINK_AB + LINK_BF_1 + LINK_EF/2, 
+                            0, 
+                            LINK_BF_2,
+                            0);
+    msg("JointsCtrl initialized.");
+    jointsCtrl.setMaxJointsSpeed(maxSpeedBuffer);
+
+    String line_1 = "STA:" + wireless.getSTAIP();
+    String line_2 = "MAC:" + wireless.getMac();
+    String line_3;
+    if (espnowMode == 0) {
+      jointsCtrl.allLedCtrl(40, 0, 0, 0);
+      line_3 = "ESP-NOW <OFF>";
+    } else if (espnowMode == 1) {
+      jointsCtrl.allLedCtrl(40, 64, 0, 255);
+      line_3 = "ESP-NOW <ON> KnownMAC";
+    } else if (espnowMode == 2) {
+      jointsCtrl.allLedCtrl(40, 64, 0, 255);
+      line_3 = "ESP-NOW <ON> BRD MAC";
+    }
+    String line_4;
+    if (jointsCtrl.espnowLeader) {
+      jointsCtrl.allLedCtrl(40, 0, 32, 255);
+      line_4 = "BRD Leader <ON>";
+    } else {
+      jointsCtrl.allLedCtrl(40, 0, 0, 0);
+      line_4 = "BRD Leader <OFF>";
+    }
+    screenCtrl.changeSingleLine(1, line_1, 0);
+    screenCtrl.changeSingleLine(2, line_2, 0);
+    screenCtrl.changeSingleLine(3, line_3, 0);
+    screenCtrl.changeSingleLine(4, line_4, 1);
+
+    jointsCtrl.allLedCtrl(40, 0, 0, 0);
+  }
+#else
   screenCtrl.clearDisplay();
   String line_1 = filesCtrl.getValueByMissionNameAndKey("boot", CMD_SET_WIFI_MODE, "ap_ssid");
   String line_2 = "AP:" + wireless.getAPIP();
@@ -356,6 +397,7 @@ void setup() {
   screenCtrl.changeSingleLine(2, line_2, 0);
   screenCtrl.changeSingleLine(3, line_3, 0);
   screenCtrl.changeSingleLine(4, line_4, 1);
+#endif
 
   setupHttpRoutes();
   server.begin();
@@ -364,7 +406,7 @@ void setup() {
   sta_ip = wireless.getSTAIP();
   ap_ip = wireless.getAPIP();
   mac_addr = wireless.getMac();
-
+  
   // runMission("boot_user", 0, -1);
   xTaskCreatePinnedToCore(
       runMissionTask,
@@ -375,8 +417,6 @@ void setup() {
       NULL,            
       1                
   );
-
-  jointsCtrl.allLedCtrl(40, 0, 0, 0);
 
 #ifdef CAN_BUS_MACHINE
   screenCtrl.init();
@@ -422,8 +462,6 @@ bool runStep(String missionName, int step) {
   }
 }
 
-
-
 void runMission(String missionName, int intervalTime, int loopTimes) {
   if (!filesCtrl.checkMission(missionName)) {
     return;
@@ -458,8 +496,13 @@ void runMission(String missionName, int intervalTime, int loopTimes) {
   }
 }
 
+void addJsonCmd2Queue(const char* jsonString) {
+  if (xQueueSend(cmdQueue, jsonString, 0) != pdPASS) {
+    msg("Queue full, dropping command");
+  }
+}
 
-void jsonCmdReceiveHandler(const JsonDocument& jsonCmdInput){
+void jsonCmdReceiveHandler(const JsonDocument& jsonCmdInput) {
   int cmdType;
   cmdType = jsonCmdInput["T"].as<int>();
   switch(cmdType){
@@ -1058,6 +1101,8 @@ void jsonCmdReceiveHandler(const JsonDocument& jsonCmdInput){
   case CMD_ADD_MAC:
                         wireless.addMacToPeerString(jsonCmdInput["mac"]);
                         break;
+  case CMD_FAKE_MAC:    wireless.fakeMac = jsonCmdInput["fake"];
+                        break;
   
 
 
@@ -1250,6 +1295,20 @@ void loop() {
       jsonFeedback["rads"][i] = String(jointFBRads[i], 3).toDouble();
       jsonFeedback["tors"][i] = jointFBTorques[i];
     }
+    jointsCtrl.readSBUS();
+    jsonFeedback["s1"] = jointsCtrl.sbus[1];
+    jsonFeedback["s2"] = jointsCtrl.sbus[2];
+    jsonFeedback["s3"] = jointsCtrl.sbus[3];
+    jsonFeedback["s4"] = jointsCtrl.sbus[4];
+
+    jsonFeedback["s5"] = jointsCtrl.sbus[5];
+    jsonFeedback["s6"] = jointsCtrl.sbus[6];
+    jsonFeedback["s7"] = jointsCtrl.sbus[7];
+    jsonFeedback["s8"] = jointsCtrl.sbus[8];
+
+    jsonFeedback["s9"] = jointsCtrl.sbus[9];
+    jsonFeedback["s10"] = jointsCtrl.sbus[10];
+
     serializeJson(jsonFeedback, outputString);
     msg(outputString);
   }
