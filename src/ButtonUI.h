@@ -17,6 +17,54 @@ GPIOButton<ESPEventPolicy> bOK(BUTTON_OK, LOW);
 ButtonCallbackMenu menu;
 bool settingLeader = false;
 
+void menuTorqueOff() {
+    espnowMode = 0;
+    wireless.setEspNowMode(0);
+    jointsCtrl.allLedCtrl(40, 255, 32, 0);
+    jointsCtrl.torqueLock(254, 0);
+    jointsCtrl.torqueLockMode = false;
+    settingLeader = true;
+    screenCtrl.clearDisplay();
+    screenCtrl.changeSingleLine(1, "TorqueLock <OFF>", 0);
+    if (jointsCtrl.espnowLeader) {
+        jointsCtrl.allLedCtrl(40, 0, 32, 255);
+        screenCtrl.changeSingleLine(2, "Leader BRD <ON>", 0);
+    } else {
+        jointsCtrl.allLedCtrl(40, 0, 0, 0);
+        screenCtrl.changeSingleLine(2, "Leader BRD <OFF>", 0);
+    }
+    screenCtrl.changeSingleLine(3, "longPress-L: ON", 0);
+    screenCtrl.changeSingleLine(4, "longPress-R: OFF", 1);
+}
+
+void menuDefault() {
+    String line_1 = "STA:" + wireless.getSTAIP();
+    String line_2 = "MAC:" + wireless.getMac();
+    String line_3;
+    if (espnowMode == 0) {
+        jointsCtrl.allLedCtrl(40, 0, 0, 0);
+        line_3 = "ESP-NOW <OFF>";
+    } else if (espnowMode == 1) {
+        jointsCtrl.allLedCtrl(40, 64, 0, 255);
+        line_3 = "ESP-NOW <ON> KnownMAC";
+    } else if (espnowMode == 2) {
+        jointsCtrl.allLedCtrl(40, 64, 0, 255);
+        line_3 = "ESP-NOW <ON> BRD MAC";
+    }
+    String line_4;
+    if (jointsCtrl.espnowLeader) {
+        jointsCtrl.allLedCtrl(40, 0, 32, 255);
+        line_4 = "BRD Leader <ON>";
+    } else {
+        jointsCtrl.allLedCtrl(40, 0, 0, 0);
+        line_4 = "BRD Leader <OFF>";
+    }
+    screenCtrl.changeSingleLine(1, line_1, 0);
+    screenCtrl.changeSingleLine(2, line_2, 0);
+    screenCtrl.changeSingleLine(3, line_3, 0);
+    screenCtrl.changeSingleLine(4, line_4, 1);
+}
+
 void runMission(String missionName, int intervalTime, int loopTimes);
 void buttonEventHandler(event_t e, const EventMsg* m){
 #ifdef USE_ROBOTIC_ARM
@@ -24,30 +72,17 @@ void buttonEventHandler(event_t e, const EventMsg* m){
         case event_t::longPress :
             if (m->gpio == BUTTON_UP){
                 buttonBuzzer();
-                espnowMode == 0;
-                jointsCtrl.allLedCtrl(40, 255, 32, 0);
-                jointsCtrl.torqueLock(254, 0);
-                jointsCtrl.torqueLockMode = false;
-                settingLeader = true;
-                screenCtrl.clearDisplay();
-                screenCtrl.changeSingleLine(1, "TorqueLock <OFF>", 0);
-                if (jointsCtrl.espnowLeader) {
-                    jointsCtrl.allLedCtrl(40, 0, 32, 255);
-                    screenCtrl.changeSingleLine(2, "Leader BRD <ON>", 0);
-                } else {
-                    jointsCtrl.allLedCtrl(40, 0, 0, 0);
-                    screenCtrl.changeSingleLine(2, "Leader BRD <OFF>", 0);
-                }
-                screenCtrl.changeSingleLine(3, "longPress-L: ON", 0);
-                screenCtrl.changeSingleLine(4, "longPress-R: OFF", 1);
+                menuTorqueOff();
             } else if (m->gpio == BUTTON_DOWN){
+                if (!jointsCtrl.checkStatus()) {
+                    return;
+                }
                 buttonBuzzer();
-                settingLeader = false;
-                jointsCtrl.espnowLeader = false;
-                jointsCtrl.allLedCtrl(40, 0, 0, 0);
-                jointsCtrl.torqueLock(254, 1);
                 if (jointsCtrl.fineTuningMode) {
                     jointsCtrl.setCurrentSCPosMiddle();
+                    if (jointsCtrl.jointsZeroPos[0] == -1 || jointsCtrl.jointsZeroPos[1] == -1 || jointsCtrl.jointsZeroPos[2] == -1 || jointsCtrl.jointsZeroPos[3] == -1) {
+                        return;
+                    }
                     jsonFeedback.clear();
                     jsonFeedback["T"] = CMD_SET_JOINTS_ZERO;
                     jsonFeedback["pos"][0] = jointsCtrl.jointsZeroPos[0];
@@ -58,33 +93,12 @@ void buttonEventHandler(event_t e, const EventMsg* m){
                     filesCtrl.appendStep("boot", outputString);
                     msg(outputString);
                     jointsCtrl.fineTuningMode = false;
-                } else {
-                    String line_1 = "STA:" + wireless.getSTAIP();
-                    String line_2 = "MAC:" + wireless.getMac();
-                    String line_3;
-                    if (espnowMode == 0) {
-                        jointsCtrl.allLedCtrl(40, 0, 0, 0);
-                        line_3 = "ESP-NOW <OFF>";
-                    } else if (espnowMode == 1) {
-                        jointsCtrl.allLedCtrl(40, 64, 0, 255);
-                        line_3 = "ESP-NOW <ON> KnownMAC";
-                    } else if (espnowMode == 2) {
-                        jointsCtrl.allLedCtrl(40, 64, 0, 255);
-                        line_3 = "ESP-NOW <ON> BRD MAC";
-                    }
-                    String line_4;
-                    if (jointsCtrl.espnowLeader) {
-                        jointsCtrl.allLedCtrl(40, 0, 32, 255);
-                        line_4 = "BRD Leader <ON>";
-                    } else {
-                        jointsCtrl.allLedCtrl(40, 0, 0, 0);
-                        line_4 = "BRD Leader <OFF>";
-                    }
-                    screenCtrl.changeSingleLine(1, line_1, 0);
-                    screenCtrl.changeSingleLine(2, line_2, 0);
-                    screenCtrl.changeSingleLine(3, line_3, 0);
-                    screenCtrl.changeSingleLine(4, line_4, 1);
-                }
+                } 
+                settingLeader = false;
+                jointsCtrl.espnowLeader = false;
+                jointsCtrl.allLedCtrl(40, 0, 0, 0);
+                jointsCtrl.torqueLock(254, 1);
+                menuDefault();
             } else if (m->gpio == BUTTON_LEFT) {
                 buttonBuzzer();
                 if (settingLeader) {
@@ -107,29 +121,7 @@ void buttonEventHandler(event_t e, const EventMsg* m){
                         espnowMode++;
                         wireless.setEspNowMode(espnowMode);
                     }
-                    String line_1 = "STA:" + wireless.getSTAIP();
-                    String line_2 = "MAC:" + wireless.getMac();
-                    String line_3;
-                    if (espnowMode == 0) {
-                        line_3 = "ESP-NOW <OFF>";
-                        jointsCtrl.allLedCtrl(40, 0, 0, 0);
-                    } else if (espnowMode == 1) {
-                        jointsCtrl.allLedCtrl(40, 64, 0, 255);
-                        line_3 = "ESP-NOW <ON> KnownMAC";
-                    } else if (espnowMode == 2) {
-                        jointsCtrl.allLedCtrl(40, 64, 0, 255);
-                        line_3 = "ESP-NOW <ON> BRD MAC";
-                    }
-                    String line_4;
-                    if (jointsCtrl.espnowLeader) {
-                        line_4 = "BRD Leader <ON>";
-                    } else {
-                        line_4 = "BRD Leader <OFF>";
-                    }
-                    screenCtrl.changeSingleLine(1, line_1, 0);
-                    screenCtrl.changeSingleLine(2, line_2, 0);
-                    screenCtrl.changeSingleLine(3, line_3, 0);
-                    screenCtrl.changeSingleLine(4, line_4, 1);
+                    menuDefault();
                 }
             } else if (m->gpio == BUTTON_RIGHT) {
                 buttonBuzzer();
@@ -149,29 +141,7 @@ void buttonEventHandler(event_t e, const EventMsg* m){
                     espnowMode = 0;
                     wireless.setEspNowMode(espnowMode);
                     jointsCtrl.allLedCtrl(40, 0, 0, 0);
-
-                    String line_1 = "STA:" + wireless.getSTAIP();
-                    String line_2 = "MAC:" + wireless.getMac();
-                    String line_3;
-                    if (espnowMode == 0) {
-                        line_3 = "ESP-NOW <OFF>";
-                    } else if (espnowMode == 1) {
-                        jointsCtrl.allLedCtrl(40, 64, 0, 255);
-                        line_3 = "ESP-NOW <ON> KnownMAC";
-                    } else if (espnowMode == 2) {
-                        jointsCtrl.allLedCtrl(40, 64, 0, 255);
-                        line_3 = "ESP-NOW <ON> BRD MAC";
-                    }
-                    String line_4;
-                    if (jointsCtrl.espnowLeader) {
-                        line_4 = "BRD Leader <ON>";
-                    } else {
-                        line_4 = "BRD Leader <OFF>";
-                    }
-                    screenCtrl.changeSingleLine(1, line_1, 0);
-                    screenCtrl.changeSingleLine(2, line_2, 0);
-                    screenCtrl.changeSingleLine(3, line_3, 0);
-                    screenCtrl.changeSingleLine(4, line_4, 1);
+                    menuDefault();
                 }
             }
 

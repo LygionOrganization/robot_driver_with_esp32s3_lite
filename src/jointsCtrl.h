@@ -24,6 +24,9 @@
 #define JOINTS_SMST_RANGE_ANGLE 360.0 // Maximum angle for each joint in degrees
 #define JOINTS_HL_RANGE_ANGLE 360.0 // Maximum angle for each joint in degrees
 
+#define GRIPPER_CLOSE 0
+#define GRIPPER_OPEN 50
+
 #define SERVO_FEEDBACK_NUM 8 // Number of feedback parameters
 #define FB_PING 0
 #define FB_POS  1
@@ -130,7 +133,7 @@ class JointsCtrl {
         JointsCtrl() {
             // Initialize jointsZeroPos array
             for(int i = 0; i < JOINTS_NUM; i++) {
-                jointsZeroPos[i] = middleSteps; // or any other default value
+                // jointsZeroPos[i] = middleSteps; // or any other default value
                 jointsFeedbackPos[i] = middleSteps; // or any other default value
                 jointsCurrentPos[i] = middleSteps; // or any other default value
                 jointsGoalPos[i] = middleSteps; // or any other default value
@@ -143,17 +146,18 @@ class JointsCtrl {
 #else
         bool linkArmFeedbackFlag = false;
 #endif
-        int linkArmFeedbackHz = 20; // link arm feedback Hz
+        int linkArmFeedbackHz = 1000; // link arm feedback Hz (reference)
 
         unsigned int baudrate = 1000000;
         bool fineTuningMode = false;
         bool torqueLockMode = true;
         bool espnowLeader = false;
+        bool sbusCtrl = false;
 
         double fpv_r = 260.5;
         double fpv_b = 0;
         double fpv_z = 122.38;
-        double fpv_g = 30;
+        double fpv_g = 0;
 
         void init(int baud);
         void setBaudRate(int baud);
@@ -207,6 +211,7 @@ class JointsCtrl {
         int* getJointsZeroPosArray();
         void setJointsZeroPosArray(int values[]);
         int* getLinkArmPosSC();
+        bool checkStatus();
         int* getLinkArmTorqueSC();
         void setCurrentSCPosMiddle();
         void linkArmSCJointsCtrlAngle(double angles[]);

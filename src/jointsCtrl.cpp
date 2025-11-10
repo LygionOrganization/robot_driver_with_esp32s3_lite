@@ -17,7 +17,7 @@ void JointsCtrl::init(int baud) {
 
 #ifdef USE_HUB_MOTORS
     gqdmd.begin(&Serial1);
-    gqdmd.setTxEnd_T32(1000000);
+    gqdmd.setTxEnd_T32(500000);
     gqdmd.setTimeOut(2);
 #endif
 
@@ -530,10 +530,15 @@ void JointsCtrl::moveTrigger() {
 // hub motor ctrl
 void JointsCtrl::hubMotorCtrl(int spd_1, int spd_2, int spd_3, int spd_4) {
 #ifdef USE_HUB_MOTORS
-    gqdmd.SpeedCtl(1, spd_1, 500, 600, 200);
-    gqdmd.SpeedCtl(2, spd_2, 500, 600, 200);
-    gqdmd.SpeedCtl(3, spd_3, 500, 600, 200);
-    gqdmd.SpeedCtl(4, spd_4, 500, 600, 200);
+    // gqdmd.SpeedCtl(1, spd_1, 500, 600, 200);
+    // gqdmd.SpeedCtl(2, spd_2, 500, 600, 200);
+    // gqdmd.SpeedCtl(3, spd_3, 500, 600, 200);
+    // gqdmd.SpeedCtl(4, spd_4, 500, 600, 200);
+    gqdmd.SpeedCtl(1, spd_1, 500, 600, 0, 0x10);
+    gqdmd.SpeedCtl(2, spd_2, 500, 600, 0, 0x10);
+    gqdmd.SpeedCtl(3, spd_3, 500, 600, 0, 0x10);
+    gqdmd.SpeedCtl(4, spd_4, 500, 600, 0, 0x10);
+    gqdmd.StatusCtl(0, 2048);
 #endif
 }
 
@@ -553,6 +558,16 @@ int* JointsCtrl::getLinkArmPosSC() {
         jointsFeedbackPos[i] = sc.ReadPos(jointID[i]);
     }
     return jointsFeedbackPos;
+}
+
+bool JointsCtrl::checkStatus() {
+    for (int i = 0; i < JOINTS_NUM; i++) {
+        jointsFeedbackPos[i] = sc.ReadPos(jointID[i]);
+        if (jointsFeedbackPos[i] == -1) {
+            return false;
+        }
+    }
+    return true;
 }
 
 int* JointsCtrl::getLinkArmTorqueSC() {
@@ -582,14 +597,14 @@ void JointsCtrl::setCurrentSCPosMiddle() {
 //          B-0
 void JointsCtrl::linkArmSCJointsCtrlAngle(double angles[]) {
     for (int i = 0; i < JOINTS_NUM; i++) {
-        jointsCurrentPos[i] = angleCtrlSC(jointID[i], jointsZeroPos[i], angles[i], 0, false);
+        jointsCurrentPos[i] = angleCtrlSC(jointID[i], jointsZeroPos[i], angles[i], jointsMaxSpeed, false);
     }
     moveTrigger();
 }
 
 void JointsCtrl::linkArmSCJointsCtrlRad(double rads[]) {
     for (int i = 0; i < JOINTS_NUM; i++) {
-        jointsCurrentPos[i] = radCtrlSC(jointID[i], jointsZeroPos[i], rads[i], 0, false);
+        jointsCurrentPos[i] = radCtrlSC(jointID[i], jointsZeroPos[i], rads[i], jointsMaxSpeed, false);
     }
     moveTrigger();
 }
@@ -657,6 +672,9 @@ void JointsCtrl::FPVIK2spaceIK() {
 }
 
 double* JointsCtrl::linkArmSpaceIK(double x, double y, double z, double g) {
+    if (g < GRIPPER_CLOSE) {
+        g = 0;
+    }
     double armIKRad_0 = atan2(-y, x);
     if (armIKRad_0 >= jointMaxRads[1] || armIKRad_0 <= jointMinRads[1]) {
         xyzgIK[0] = -1;
@@ -687,6 +705,9 @@ double* JointsCtrl::linkArmSpaceIK(double x, double y, double z, double g) {
 }
 
 double* JointsCtrl::linkArmFPVIK(double r, double b, double z, double g) {
+    if (g < GRIPPER_CLOSE) {
+        g = 0;
+    }
     if (b >= jointMaxRads[1] || b <= jointMinRads[1]) {
         rbzgIK[0] = -1;
         FPVIK2spaceIK();
@@ -889,7 +910,7 @@ void JointsCtrl::allLedCtrl(u_int8_t id, u_int8_t r, u_int8_t g, u_int8_t b) {
 }
 
 int JointsCtrl::readSBUS() {
-    sbus[0] = 0;
+    sbus[0] = smst.readByte(40, 67);
     sbus[1] = smst.readWord(40, 68);
     sbus[2] = smst.readWord(40, 70);
     sbus[3] = smst.readWord(40, 72);

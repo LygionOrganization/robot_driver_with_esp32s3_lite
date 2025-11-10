@@ -15,12 +15,19 @@
 
 #ifdef DEV_TYPE_LINKARM_LT
 #define USE_ROBOTIC_ARM
+// #define BUS_SERVO_BAUD_RATE 1000000
 #define BUS_SERVO_BAUD_RATE 500000
 #else
 #define BUS_SERVO_BAUD_RATE 1000000
 // #define BUS_SERVO_BAUD_RATE 500000
 // #define BUS_SERVO_BAUD_RATE 115200
 #endif
+
+#define USE_HUB_MOTORS
+#define SBUS_MAX 1722.0
+#define SBUS_MIN 282.0
+#define SBUS_MID 1002.0
+#define SBUS_RAN 720.0
 
 #ifdef DEV_TYPE_SBUS_UGV_A
 #define UART0_AS_SBUS
@@ -249,10 +256,7 @@ static int timeOffset = 50;
 
 // {"T":131,"pos":[512,512,512,512]}
 // example LyLinkArm
-// {"T":131,"pos":[497,505,286,557]} (LE-2)
-// {"T":131,"pos":[494,509,292,515]} (LE-3)
-// {"T":131,"pos":[519,471,484,514]} (LY-6V)
-// {"T":131,"pos":[496,514,292,514]} (LY-M)
+// {"T":131,"pos":[496,529,291,242]} (LY-M)
 // jointsCtrl.setJointsZeroPosArray(int values[]);
 #define CMD_SET_JOINTS_ZERO 131
 

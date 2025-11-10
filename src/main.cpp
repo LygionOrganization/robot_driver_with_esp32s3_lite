@@ -315,7 +315,6 @@ void setup() {
 #ifdef USE_ESP_NOW
   wireless.espnowInit(false);
   // wireless.espnowInit(true); // longRange Mode
-  // wireless.setJsonCommandCallback(jsonCmdReceiveHandler);
   wireless.setJsonCommandCallback(addJsonCmd2Queue);
   msg("ESP-NOW initialized.");
 #else
@@ -341,9 +340,19 @@ void setup() {
   wireless.addMacToPeer(broadcastAddress);
   if (!filesCtrl.checkStepByType("boot", CMD_SET_JOINTS_ZERO)) {
     msg("No CMD_SET_JOINTS_ZERO found, torqueLock <OFF>");
+    jointsCtrl.setJointsZeroPosArray(jointsZeroPos);
     jointsCtrl.torqueLockMode = false;
     jointsCtrl.fineTuningMode = true;
+    jointsCtrl.allLedCtrl(40, 255, 128, 0);
+
+    double maxSpeedBuffer = jointsCtrl.getMaxJointsSpeed();
+    jointsCtrl.setMaxJointsSpeed(50);
+    double anglesBuffer[4] = {0, 0, 0, -90};
+    jointsCtrl.linkArmSCJointsCtrlAngle(anglesBuffer);
+    delay(3500);
     jointsCtrl.allLedCtrl(40, 255, 32, 0);
+    jointsCtrl.setMaxJointsSpeed(maxSpeedBuffer);
+
     jointsCtrl.torqueLock(254, 0);
     screenCtrl.changeSingleLine(1, "-----o---o     Manual", 0);
     screenCtrl.changeSingleLine(2, "     |   | Joint Pose", 0);
@@ -355,7 +364,7 @@ void setup() {
     jointsCtrl.linkArmFPVIK(LINK_AB + LINK_BF_1 + LINK_EF/2, 
                             0, 
                             LINK_BF_2,
-                            0);
+                            GRIPPER_OPEN);
     msg("JointsCtrl initialized.");
     jointsCtrl.setMaxJointsSpeed(maxSpeedBuffer);
 
@@ -1295,22 +1304,68 @@ void loop() {
       jsonFeedback["rads"][i] = String(jointFBRads[i], 3).toDouble();
       jsonFeedback["tors"][i] = jointFBTorques[i];
     }
-    jointsCtrl.readSBUS();
-    jsonFeedback["s1"] = jointsCtrl.sbus[1];
-    jsonFeedback["s2"] = jointsCtrl.sbus[2];
-    jsonFeedback["s3"] = jointsCtrl.sbus[3];
-    jsonFeedback["s4"] = jointsCtrl.sbus[4];
+    if (jointsCtrl.sbusCtrl) {
+      jointsCtrl.readSBUS();
+      if (jointsCtrl.sbus[8] == SBUS_MAX) {
+        jointsCtrl.fpv_r = 260.5;
+        jointsCtrl.fpv_b = 0;
+        jointsCtrl.fpv_z = 122.38;
+        jointsCtrl.fpv_g = 0;
+        jointsCtrl.linkArmFPVIK(260.5, 0, 122.38, 0);
+      } else if (jointsCtrl.sbus[7] == SBUS_MAX) {
+        jointsCtrl.torqueLock(254, 0);
+      } else {
+        if (jointsCtrl.sbus[0] == 0) {
+          jointsCtrl.fpv_z += (SBUS_MID - jointsCtrl.sbus[2])*0.0036;
+          jointsCtrl.fpv_b += (jointsCtrl.sbus[1] - SBUS_MID)*0.000018;
+          jointsCtrl.fpv_r = jointsCtrl.mapDouble(jointsCtrl.sbus[10], SBUS_MAX, SBUS_MIN, 0, 320);
+          if (jointsCtrl.sbus[6] == SBUS_MIN) {
+            // jointsCtrl.fpv_g = 15;
+            jointsCtrl.torqueLock(SERVO_ARRAY_3, 0);
+          } else if (jointsCtrl.sbus[6] == SBUS_MID) {
+            jointsCtrl.fpv_g = -50;
+          } else if (jointsCtrl.sbus[6] == SBUS_MAX) {
+            jointsCtrl.fpv_g = 0;
+          }
 
-    jsonFeedback["s5"] = jointsCtrl.sbus[5];
-    jsonFeedback["s6"] = jointsCtrl.sbus[6];
-    jsonFeedback["s7"] = jointsCtrl.sbus[7];
-    jsonFeedback["s8"] = jointsCtrl.sbus[8];
+          jointsCtrl.linkArmFPVIK(jointsCtrl.fpv_r, jointsCtrl.fpv_b, jointsCtrl.fpv_z, jointsCtrl.fpv_g);
 
-    jsonFeedback["s9"] = jointsCtrl.sbus[9];
-    jsonFeedback["s10"] = jointsCtrl.sbus[10];
+          float speed_limit = 1.0;
+          if (jointsCtrl.sbus[5] == SBUS_MIN) {
+            speed_limit = 0.33;
+          } else if (jointsCtrl.sbus[5] == SBUS_MID) {
+            speed_limit = 0.66;
+          } else if (jointsCtrl.sbus[5] == SBUS_MAX) {
+            speed_limit = 1.0;
+          }
+
+          double speed_input = constrain(float(jointsCtrl.sbus[3] - SBUS_MID)/SBUS_RAN, -1.0, 1.0);
+          double turn_input = - constrain(float(jointsCtrl.sbus[4] - SBUS_MID)/SBUS_RAN, -1.0, 1.0);
+
+          int left_speed = (speed_input) * speed_limit * 6000.0 - (turn_input * 0.33 * 6000.0);
+          int right_speed = (speed_input) * speed_limit * 6000.0 + (turn_input * 0.33 * 6000.0);
+
+          delay(2);
+          jointsCtrl.hubMotorCtrl(left_speed, right_speed, right_speed, left_speed);
+          delay(2);
+        } else {
+          jointsCtrl.hubMotorCtrl(0, 0, 0, 0);
+          jointsCtrl.torqueLock(254, 0);
+        }
+      }
+    }
 
     serializeJson(jsonFeedback, outputString);
     msg(outputString);
+    if (jointsCtrl.espnowLeader && !jointsCtrl.sbusCtrl) {
+      jsonFeedback.clear();
+      jsonFeedback["T"] = CMD_LINK_ARM_SC_JOINTS_CTRL_RAD;
+      jsonFeedback["rad"][0] = jointFBRads[0];
+      jsonFeedback["rad"][1] = jointFBRads[1];
+      jsonFeedback["rad"][2] = jointFBRads[2];
+      jsonFeedback["rad"][3] = jointFBRads[3];
+      wireless.sendEspNowJson(broadcastAddress, jsonFeedback);
+    }
   }
 #endif
 

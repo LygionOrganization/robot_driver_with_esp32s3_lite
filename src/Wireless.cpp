@@ -172,7 +172,6 @@ bool Wireless::isKnownMac(const uint8_t *mac) {
 }
 
 void Wireless::OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
-    Serial.println("EN-1");
     if (espnowMode == 0) {
         // do nothing
         return;
