@@ -1,6 +1,7 @@
 #include "Wireless.h"
 
 JsonCommandCallback jsonCommandCallback = nullptr;
+RelativeStepsCtrlCallback relativeStepsCtrlCallback = nullptr;;
 Wireless* g_pThis = nullptr;
 
 #define WIFI_MODE_NONE 0
@@ -8,9 +9,18 @@ Wireless* g_pThis = nullptr;
 
 JsonDocument jsonCmdReceiveEspnow;
 
+#ifndef ESP_NOW_SYNC
 typedef struct struct_message {
     char message[250];
   } struct_message;
+#else
+typedef struct struct_message {
+    int j0;
+    int j1;
+    int j2;
+    int j3;
+  } struct_message;
+#endif
 struct_message espNowMessage;
 struct_message espNowMegsRecv;
 esp_now_peer_info_t peerInfo;
@@ -184,9 +194,13 @@ void Wireless::OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data
     }
     if (data_len == sizeof(struct_message)) {
         memcpy(&espNowMegsRecv, data, sizeof(espNowMegsRecv));
+#ifndef ESP_NOW_SYNC
         espNowMegsRecv.message[sizeof(espNowMegsRecv.message) - 1] = '\0';
         jsonCommandCallback(espNowMegsRecv.message);
         Serial.println(espNowMegsRecv.message);
+#else
+        relativeStepsCtrlCallback(espNowMegsRecv.j0, espNowMegsRecv.j1, espNowMegsRecv.j2, espNowMegsRecv.j3);
+#endif
     }
 } 
 
@@ -227,7 +241,9 @@ void Wireless::espnowInit(bool longRange) {
     // knownMacs.push_back(defaultMac2);
 }
 
-
+int Wireless::getEspNowMode() {
+    return espnowMode;
+}
 
 bool Wireless::setEspNowMode(int mode) {
     if (mode == 0) {
@@ -266,7 +282,26 @@ void Wireless::macStringToByteArray(const String& macString, uint8_t* byteArray)
     return;
 }
 
+bool Wireless::sendEspNowSteps(uint8_t mac[6], int j0, int j1, int j2, int j3) {
+#ifdef ESP_NOW_SYNC
+    espNowMessage.j0 = j0;
+    espNowMessage.j1 = j1;
+    espNowMessage.j2 = j2;
+    espNowMessage.j3 = j3;
+    if (esp_now_send(mac, (uint8_t*)&espNowMessage, sizeof(struct_message)) != ESP_OK) {
+        // Serial.println("Failed to send data");
+        return false;
+    } else {
+        // Serial.println("Data sent successfully");
+        return true;
+    }
+#else
+return false;
+#endif
+}
+
 bool Wireless::sendEspNow(String macInput, String data) {
+#ifndef ESP_NOW_SYNC
     if (macInput.length() != 17) {
         Serial.println("invalid MAC address format.");
         return false;
@@ -289,9 +324,13 @@ bool Wireless::sendEspNow(String macInput, String data) {
         // Serial.println("Data sent successfully");
         return true;
     }
+#else
+    return false;
+#endif
 }
 
 bool Wireless::sendEspNowJson(uint8_t mac[6], const JsonDocument& jsonCmdInput) {
+#ifndef ESP_NOW_SYNC
     serializeJson(jsonCmdInput, espNowMessage.message, sizeof(espNowMessage.message));
 
     // if (esp_now_send(mac, (uint8_t*)outputString, strlen(outputString)) != ESP_OK) {
@@ -302,10 +341,17 @@ bool Wireless::sendEspNowJson(uint8_t mac[6], const JsonDocument& jsonCmdInput) 
         // Serial.println("Data sent successfully");
         return true;
     }
+#else
+    return false;
+#endif
 }
 
 void Wireless::setJsonCommandCallback(JsonCommandCallback callback) {
     jsonCommandCallback = callback;
+}
+
+void Wireless::setRelativeStepsCtrlCallback(RelativeStepsCtrlCallback callback) {
+    relativeStepsCtrlCallback = callback;
 }
 
 void Wireless::addMacToPeerString(String macInput) {

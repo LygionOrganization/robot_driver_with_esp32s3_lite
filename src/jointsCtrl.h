@@ -117,6 +117,7 @@ class JointsCtrl {
         int jointsFeedbackPos[JOINTS_NUM]; // array to store the feedback position from each joint
         int jointsFeedbackTorque[JOINTS_NUM]; // array to store the feedback torque from each joint
         int jointsCurrentPos[JOINTS_NUM]; // array to store the current position of each joint
+        int jointsRelativeSteps[JOINTS_NUM]; // array to store the relative servo steps
         int jointsGoalPos[JOINTS_NUM]; // array to store the goal position of each joint
         int jointsLastPos[JOINTS_NUM]; // array to store the last position of each joint
         int jointID[JOINTS_NUM] = {SERVO_ARRAY_0, SERVO_ARRAY_1, SERVO_ARRAY_2, SERVO_ARRAY_3};
@@ -211,6 +212,8 @@ class JointsCtrl {
         int* getJointsZeroPosArray();
         void setJointsZeroPosArray(int values[]);
         int* getLinkArmPosSC();
+        void relativeStepsCtrl(int j0, int j1, int j2, int j3);
+        int* getRelativeSteps();
         bool checkStatus();
         int* getLinkArmTorqueSC();
         void setCurrentSCPosMiddle();

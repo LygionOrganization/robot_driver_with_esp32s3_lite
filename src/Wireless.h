@@ -10,9 +10,13 @@
 #include <ArduinoJson.h>
 #include "Web_page.h"
 
+// #define ESP_NOW_SYNC // comment this out to use ESP-NOW for JSON communication
+
 typedef std::array<uint8_t, 6> MacAddress;
 
 typedef void (*JsonCommandCallback)(const char* jsonString);
+typedef void (*RelativeStepsCtrlCallback)(int j0, int j1, int j2, int j3);
+
 static uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 // 0 -> no esp-now receive[default]
@@ -42,9 +46,11 @@ class Wireless{
         void macStringToByteArray(const String& macString, uint8_t* byteArray);
         String macToString(uint8_t mac[6]);
         String getMac();
+        bool sendEspNowSteps(uint8_t mac[6], int j0, int j1, int j2, int j3);
         bool sendEspNow(String macInput, String data);
         bool sendEspNowJson(uint8_t mac[6], const JsonDocument& jsonCmdInput);
         void setJsonCommandCallback(JsonCommandCallback callback);
+        void setRelativeStepsCtrlCallback(RelativeStepsCtrlCallback callback);
         void addMacToPeerString(String macInput);
         void addMacToPeer(uint8_t mac[6]);
     private:

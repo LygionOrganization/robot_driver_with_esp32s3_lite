@@ -560,6 +560,21 @@ int* JointsCtrl::getLinkArmPosSC() {
     return jointsFeedbackPos;
 }
 
+void JointsCtrl::relativeStepsCtrl(int j0, int j1, int j2, int j3) {
+    int j[JOINTS_NUM] = {j0, j1, j2, j3};
+    for (int i = 0; i < JOINTS_NUM; i++) {
+        stepsCtrlSC(jointID[i], jointsZeroPos[i] + j[i], 0, 0, false);
+    }
+    moveTrigger();
+}
+
+int* JointsCtrl::getRelativeSteps() {
+    for (int i = 0; i < JOINTS_NUM; i++) {
+        jointsRelativeSteps[i] = sc.ReadPos(jointID[i]) - jointsZeroPos[i];
+    }
+    return jointsRelativeSteps;
+}
+
 bool JointsCtrl::checkStatus() {
     for (int i = 0; i < JOINTS_NUM; i++) {
         jointsFeedbackPos[i] = sc.ReadPos(jointID[i]);

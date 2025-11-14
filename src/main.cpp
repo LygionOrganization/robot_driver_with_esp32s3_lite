@@ -36,12 +36,15 @@ Wireless wireless;
 #define CMD_MAX_LEN 256
 #define CMD_QUEUE_LEN 50
 
+int espNowPacket[4] = {0, 0, 0, 0};
+
 bool breakloop = false;
 unsigned long tuneStartTime;
 int* jointFeedback;
 
 int jointsZeroPos[JOINTS_NUM] = {511, 511, 511, 511};
 int jointsCurrentPos[JOINTS_NUM];
+int jointsRelativesSteps[JOINTS_NUM];
 double jointFBRads[JOINTS_NUM];
 int jointFBTorques[JOINTS_NUM];
 double jointsGoalBuffer[JOINTS_NUM];
@@ -52,6 +55,7 @@ double rbzgIK[JOINTS_NUM + 1];
 
 void jsonCmdReceiveHandler(const JsonDocument& jsonCmdInput);
 void addJsonCmd2Queue(const char* jsonString);
+void relativeStepsCtrl(int j0, int j1, int j2, int j3);
 void runMission(String missionName, int intervalTime, int loopTimes);
 
 unsigned long startTime;
@@ -315,7 +319,11 @@ void setup() {
 #ifdef USE_ESP_NOW
   wireless.espnowInit(false);
   // wireless.espnowInit(true); // longRange Mode
+#ifndef ESP_NOW_SYNC
   wireless.setJsonCommandCallback(addJsonCmd2Queue);
+#else
+  wireless.setRelativeStepsCtrlCallback(relativeStepsCtrl);
+#endif
   msg("ESP-NOW initialized.");
 #else
   msg("ESP-NOW NOT initialized.");
@@ -509,6 +517,14 @@ void addJsonCmd2Queue(const char* jsonString) {
   if (xQueueSend(cmdQueue, jsonString, 0) != pdPASS) {
     msg("Queue full, dropping command");
   }
+}
+
+void relativeStepsCtrl(int j0, int j1, int j2, int j3) {
+  espNowPacket[0] = j0;
+  espNowPacket[1] = j1;
+  espNowPacket[2] = j2;
+  espNowPacket[3] = j3;
+  // jointsCtrl.relativeStepsCtrl(j0, j1, j2, j3);
 }
 
 void jsonCmdReceiveHandler(const JsonDocument& jsonCmdInput) {
@@ -1247,6 +1263,21 @@ void serialCtrl() {
   } 
 }
 
+static unsigned long executeCount = 0;
+static unsigned long lastPrintTime = 0;
+const unsigned long PRINT_INTERVAL = 5000;
+void printExecuteFrequency() {
+  executeCount++;
+  unsigned long currentTime;
+  currentTime = millis();
+  if (currentTime - lastPrintTime >= PRINT_INTERVAL) {
+    float frequency = (float)executeCount / (PRINT_INTERVAL / 1000.0f);
+    Serial.println(frequency);
+    lastPrintTime = currentTime;
+    executeCount = 0;
+  }
+}
+
 
 void loop() {
   // unsigned long startMicros = micros();
@@ -1294,7 +1325,7 @@ void loop() {
 
 #ifdef USE_ROBOTIC_ARM
   static unsigned long lastFeedbackTime = 0;
-  if (jointsCtrl.linkArmFeedbackFlag && (millis() - lastFeedbackTime >= (1000 / jointsCtrl.linkArmFeedbackHz))) {
+  if (jointsCtrl.linkArmFeedbackFlag && (millis() - lastFeedbackTime >= (1000 / jointsCtrl.linkArmFeedbackHz)) && !jointsCtrl.espnowLeader && wireless.getEspNowMode() == 0) {
     lastFeedbackTime = millis();
     memcpy(jointFBRads, jointsCtrl.getJointFBRads(), sizeof(jointFBRads));
     memcpy(jointFBTorques, jointsCtrl.getLinkArmTorqueSC(), sizeof(jointFBTorques));
@@ -1320,7 +1351,6 @@ void loop() {
           jointsCtrl.fpv_b += (jointsCtrl.sbus[1] - SBUS_MID)*0.000018;
           jointsCtrl.fpv_r = jointsCtrl.mapDouble(jointsCtrl.sbus[10], SBUS_MAX, SBUS_MIN, 0, 320);
           if (jointsCtrl.sbus[6] == SBUS_MIN) {
-            // jointsCtrl.fpv_g = 15;
             jointsCtrl.torqueLock(SERVO_ARRAY_3, 0);
           } else if (jointsCtrl.sbus[6] == SBUS_MID) {
             jointsCtrl.fpv_g = -50;
@@ -1357,17 +1387,21 @@ void loop() {
 
     serializeJson(jsonFeedback, outputString);
     msg(outputString);
-    if (jointsCtrl.espnowLeader && !jointsCtrl.sbusCtrl) {
-      jsonFeedback.clear();
-      jsonFeedback["T"] = CMD_LINK_ARM_SC_JOINTS_CTRL_RAD;
-      jsonFeedback["rad"][0] = jointFBRads[0];
-      jsonFeedback["rad"][1] = jointFBRads[1];
-      jsonFeedback["rad"][2] = jointFBRads[2];
-      jsonFeedback["rad"][3] = jointFBRads[3];
-      wireless.sendEspNowJson(broadcastAddress, jsonFeedback);
-    }
+  }
+
+  if (jointsCtrl.espnowLeader && !jointsCtrl.sbusCtrl) {
+    // jsonFeedback.clear();
+    // jsonFeedback["T"] = CMD_LINK_ARM_SC_JOINTS_CTRL_RAD;
+    // jsonFeedback["rad"][0] = jointFBRads[0];
+    // jsonFeedback["rad"][1] = jointFBRads[1];
+    // jsonFeedback["rad"][2] = jointFBRads[2];
+    // jsonFeedback["rad"][3] = jointFBRads[3];
+    // wireless.sendEspNowJson(broadcastAddress, jsonFeedback);
+    memcpy(jointsRelativesSteps, jointsCtrl.getRelativeSteps(), sizeof(jointsRelativesSteps));
+    wireless.sendEspNowSteps(broadcastAddress, jointsRelativesSteps[0], jointsRelativesSteps[1], jointsRelativesSteps[2], jointsRelativesSteps[3]);
   }
 #endif
+
 
   char cmdBuffer[CMD_MAX_LEN];
   if (xQueueReceive(cmdQueue, cmdBuffer, 0) == pdPASS) {
@@ -1379,8 +1413,16 @@ void loop() {
       msg("JSON parse error");
     }
   }
+  
+  if(!jointsCtrl.espnowLeader) {
+    pushTelemetry();
+  }
 
-  pushTelemetry();
+  printExecuteFrequency();
+
+  if(wireless.getEspNowMode() != 0) {
+    jointsCtrl.relativeStepsCtrl(espNowPacket[0], espNowPacket[1], espNowPacket[2], espNowPacket[3]);
+  }
 
 #ifdef CAN_BUS_MACHINE
   canTestMachine();

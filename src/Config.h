@@ -1,7 +1,7 @@
 // === Select Devive Type ===
 // === Only One Device Type Can Be Selected ===
-// #define DEV_TYPE_RD_LITE
-#define DEV_TYPE_LINKARM_LT
+#define DEV_TYPE_RD_LITE
+// #define DEV_TYPE_LINKARM_LT
 // #define DEV_TYPE_SBUS_UGV_A
 
 // === Test Machine ===
